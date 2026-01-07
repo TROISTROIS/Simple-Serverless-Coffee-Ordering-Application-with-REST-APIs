@@ -1,2 +1,2 @@
 # Simple-Serverless-Coffee-Ordering-Application-with-REST-APIs
-This project demonstrates AWS Serverless with decoupling. 
+This project demonstrates AWS Serverless with decoupling. It invloves a simple e-commerce application where uses can order coffee using a browser on the shop's website that is hosted on S3. The orders will be forwarded through to a REST API  running on Amazon API Gateway. The API proxies the request to a lambda function which then places it on an SQS queue so that another lambda function can process these orders and place them in a DynamoDB table. 
