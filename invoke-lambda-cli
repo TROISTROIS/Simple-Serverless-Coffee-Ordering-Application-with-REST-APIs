@@ -1,0 +1,5 @@
+#1.  use a file editor to create this input.json file
+{"body": "{\"productName\": \"Test Product 3\", \"quantity\": 1}"} > input.json
+
+#2. Invoke the lambda function
+aws lambda invoke --function-name lambda-function --payload fileb://input.json output.json
