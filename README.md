@@ -22,12 +22,57 @@ Use Cases:
    Execution role: AmazonSQSFullAccess </br>
 
 2. Create SQS queue
-   Create a standard queue
-   Name: ProductOrdersQueue
-   Update the code on step 1 to have this queue's URL
+   Create a standard queue </br>
+   Name: ProductOrdersQueue </br>
+   Update the code on step 1 to have this queue's URL </br>
 
 3. Deploy **submit-order** lambda function
-   Create a test event with the following data
+   Create a test event with the following data </br>
+   `{"body": "{\"productName\": \"Test Product 3\", \"quantity\": 1}"}`
+
+4. Head over to SQS and poll for messages, you should see a message on the queue.
+5. Create the second lambda function
+   Name: process-orders</br>
+   Runtime: Python 3.x </br>
+   Execution role: AmazonSQSFullAccess and AmazonDynamoDBFullAccess
+6. Create a DynamoDB table
+   Name: ProductOrders</br>
+   Primary Key: orderId</br>
+   Add table name to **process-orders** lambda function.
+7. Configure SQS to trigger **process-orders** lambda function
+8. Check the DynamoDB table to see if the first test event was processed. You should see 1 item on the table.
+9. Test using the CLI/CloudShell with a file named input.json with the following content : </br>
+    `{"body": "{\"productName\": \"Test Product 7\", \"quantity\": 3}"}`
+10. Invoke the lambda function using this file above : </br>
+    `aws lambda invoke --function-name lambda-function --payload fileb://input.json output.json`
+11. Create the API
+    Create a REST API in the API Gateway console and name it ProductOrdersAPI</br>
+    Create a new resource */orders* and enable **CORS**</br>
+    Create a **POST** method for the resource and integrate it with **submit-order** lambda function.</br>
+    Enable lambda proxy integration</br>
+    Deploy the API to **prod**
+12. Update the **index.html** file with your APIs URL.
+13. Create an S3 bucket and configure it for static website hosting.
+    Enable public access using the following bucket policy: </br>
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "PublicReadGetObject",
+         "Effect": "Allow",
+         "Principal": "*",
+         "Action": "s3:GetObject",
+         "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
+       }
+     ]
+   }
+   ```
+14. Test the Application by placing an order
+    
+   
+   
    
 
  
