@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Template to provision infrastructure for the serverless coffee shop
+
+Parameters:
+  DynamoDBtablename:
+    Description: Name of the dynamodb table
+    Type: String
+    Default: orderId
+
+Resources:
+  Orders:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: !Ref DynamoDBtablename
+          AttributeType: S
+      KeySchema: 
+        - AttributeName: !Ref DynamoDBtablename
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+            
+
+Outputs:
+  DynamoDB:
+    Value: !Ref DynamoDBtablename
+    Export:
+      Name: DynamoDB-Table
