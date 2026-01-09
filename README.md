@@ -15,9 +15,16 @@ Use Cases:
 2. Visual Studio Code or editor of your choice.
 3. Draw.io for drawing the architecture diagram.
 
-### **Steps to follow**
-1. Create the first Lamda function.
-   Name: submit-order </br>
+### Deployment
+To deploy this project and its infrastructure you can do the following two ways:
+
+### Deploy Infrastructure using CloudFormation. 
+Use the **yaml** file above to provision the infrastructure.</br>
+
+### Use the AWS Management console
+To use the management console, follow these steps:</br>
+1. Create the first Lamda function.</br>
+   Name: **submit-order** </br>
    Runtime: Python 3.x </br>
    Execution role: AmazonSQSFullAccess </br>
 
