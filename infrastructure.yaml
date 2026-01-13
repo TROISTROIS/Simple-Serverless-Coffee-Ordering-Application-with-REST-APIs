@@ -21,7 +21,8 @@ Parameters:
     Default: CoffeeShopAPI
   APIEnvironmentStage:
     Type: String
-    Name: prod
+    Default: prod
+  bucketname: go-to-sleep-enable-cors
 
 Resources:
   SQSQueue:
@@ -57,21 +58,41 @@ Resources:
               - sts:AssumeRole
       RoleName: process-orders-lambda-execution-role
       Policies: 
-        - PolicyName: SQS-DynamoDB-Policy 
-          PolicyDocument: 
+        - PolicyName: Policy_api-lambda-db
+          PolicyDocument:
             Version: 2012-10-17
-            Statement: 
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:BatchGetItem'
+                  - 'dynamodb:BatchWriteItem'
+                  - 'dynamodb:TagResource'
+                  - 'dynamodb:UntagResource'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:UpdateItem'
+                Resource: !GetAtt DynamoDBTable.Arn
               - Effect: Allow
                 Action: 
                   - sqs:*
-                  - dynamodb:*
-                  - s3:*
                 Resource:
                   - !GetAtt SQSQueue.Arn
-                  - !GetAtt DynamoDBTable.Arn
+              - Effect: Allow
+                Action: 
+                  - s3:*
+                Resource:
                   - !Sub 
                     - "${BktArn}/*"
                     - BktArn: !ImportValue S3BucketArn
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
 
   submitLambdaFunction:
     Type: AWS::Lambda::Function
@@ -107,7 +128,7 @@ Resources:
       ParentId: !GetAtt
         - coffeeRESTAPI
         - RootResourceId
-      PathPart: coffee-shop 
+      PathPart: orders
 
   POSTMethod:
     Type: AWS::ApiGateway::Method
@@ -121,31 +142,31 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub >-
           arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${submitLambdaFunction.Arn}/invocations
+  
+  APIDeploy:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref coffeeRESTAPI
+      StageName: !Ref APIEnvironmentStage
+    DependsOn: POSTMethod
 
   APIInvokeLambdaRole:
     Type: AWS::Lambda::Permission
     Properties: 
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt submitLambdaFunction.Arn
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !GetAtt coffeeRESTAPI.Arn
       Principal: apigateway.amazonaws.com
-
-  APIDeploy:
-    Type: AWS::ApiGateway::Deployment
-    Properties:
-      RestApiId: !Ref coffeeRESTAPI
-      StageName: !Ref APIEnvironmentStage
+    DependsOn: APIDeploy
 
   S3CoffeeWebsite:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: webiste-coffee-shop-1991
+      BucketName: !Ref bucketname
       PublicAccessBlockConfiguration: 
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       WebsiteConfiguration: 
         IndexDocument: index.html
   
@@ -157,7 +178,7 @@ Resources:
         Version: 2012-10-17
         Statement:
         - Action:
-            - s3.GetObject
+            - s3:GetObject
           Effect: Allow
           Resource: !Join
             - ''
@@ -191,3 +212,11 @@ Outputs:
           - S3CoffeeWebsite
           - DomainName 
     Description: Name of the bucket containing website(coffee shop) content
+  
+  APIEndpoint:
+    Value: !Sub 
+      - https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+      - APIGateway: !Ref coffeeRESTAPI
+        Environment: !Ref APIEnvironmentStage
+    Export:
+      Name: APIGatewayEndpoint
