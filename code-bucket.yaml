@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Template to create a bucket that stores zip files of the code used by lambda functions
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: code-coffee-shop-bkt
+      
+Outputs:
+  S3Bucket:
+    Value: !GetAtt 
+    - S3Bucket
+    - Arn
