@@ -8,7 +8,14 @@ Resources:
       BucketName: code-coffee-shop-bkt
       
 Outputs:
-  S3Bucket:
-    Value: !GetAtt 
-    - S3Bucket
-    - Arn
+  S3BucketName:
+    Value: !Ref S3Bucket
+    Export: 
+      Name: BucketName
+
+  BucketArn:
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      # The name must be unique within the AWS account and region
+      Name: S3BucketArn
+  
