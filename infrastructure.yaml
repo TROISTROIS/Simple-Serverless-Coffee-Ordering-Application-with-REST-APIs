@@ -22,7 +22,9 @@ Parameters:
   APIEnvironmentStage:
     Type: String
     Default: prod
-  bucketname: go-to-sleep-enable-cors
+  bucketname: 
+    Type: String
+    Default: go-to-sleep-enable-cors
 
 Resources:
   SQSQueue:
