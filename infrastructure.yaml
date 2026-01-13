@@ -2,28 +2,192 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: CloudFormation Template to provision infrastructure for the serverless coffee shop
 
 Parameters:
-  DynamoDBtablename:
+  DynamoDBtable:
     Description: Name of the dynamodb table
     Type: String
     Default: orderId
+  SQSName:
+    Description: Name of the SQS Queue 
+    Type: String 
+    Default: coffee-shop-queue
+  Key1:
+    Type: String
+    Default: submit-order.zip
+  Key2:
+    Type: String
+    Default: process-orders.zip
+  APIName:
+    Type: String 
+    Default: CoffeeShopAPI
+  APIEnvironmentStage:
+    Type: String
+    Name: prod
 
 Resources:
-  Orders:
+  SQSQueue:
+    Type: AWS::SQS::Queue 
+    Properties:
+      QueueName: !Ref SQSName 
+
+  DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-        - AttributeName: !Ref DynamoDBtablename
+        - AttributeName: !Ref DynamoDBtable
           AttributeType: S
       KeySchema: 
-        - AttributeName: !Ref DynamoDBtablename
+        - AttributeName: !Ref DynamoDBtable
           KeyType: HASH
       ProvisionedThroughput:
         ReadCapacityUnits: '5'
         WriteCapacityUnits: '5'
-            
+      TableName: orders
+
+  IAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      RoleName: process-orders-lambda-execution-role
+      Policies: 
+        - PolicyName: SQS-DynamoDB-Policy 
+          PolicyDocument: 
+            Version: 2012-10-17
+            Statement: 
+              - Effect: Allow
+                Action: 
+                  - sqs:*
+                  - dynamodb:*
+                  - s3:*
+                Resource:
+                  - !GetAtt SQSQueue.Arn
+                  - !GetAtt DynamoDBTable.Arn
+                  - !Sub 
+                    - "${BktArn}/*"
+                    - BktArn: !ImportValue S3BucketArn
+
+  submitLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.14
+      FunctionName: submit-orders
+      Role: !GetAtt IAMRole.Arn
+      Handler: submit-order.lambda_handler
+      Code:
+        S3Bucket: !ImportValue BucketName
+        S3Key: !Ref Key1
+
+  processLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.14
+      FunctionName: process-orders
+      Role: !GetAtt IAMRole.Arn
+      Handler: process-orders.lambda_handler
+      Code:
+        S3Bucket: !ImportValue BucketName
+        S3Key: !Ref Key2
+
+  coffeeRESTAPI:
+    Type: AWS::ApiGateway::RestApi 
+    Properties: 
+      Name: !Ref APIName
+  
+  OrdersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref coffeeRESTAPI
+      ParentId: !GetAtt
+        - coffeeRESTAPI
+        - RootResourceId
+      PathPart: coffee-shop 
+
+  POSTMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref coffeeRESTAPI
+      ResourceId: !Ref OrdersResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration: 
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub >-
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${submitLambdaFunction.Arn}/invocations
+
+  APIInvokeLambdaRole:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt submitLambdaFunction.Arn
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt coffeeRESTAPI.Arn
+      Principal: apigateway.amazonaws.com
+
+  APIDeploy:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref coffeeRESTAPI
+      StageName: !Ref APIEnvironmentStage
+
+  S3CoffeeWebsite:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: webiste-coffee-shop-1991
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      WebsiteConfiguration: 
+        IndexDocument: index.html
+  
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties: 
+      Bucket: !Ref S3CoffeeWebsite
+      PolicyDocument: 
+        Version: 2012-10-17
+        Statement:
+        - Action:
+            - s3.GetObject
+          Effect: Allow
+          Resource: !Join
+            - ''
+            - - 'arn:aws:s3:::'
+              - !Ref S3CoffeeWebsite
+              - /*
+          Principal: '*'
 
 Outputs:
   DynamoDB:
-    Value: !Ref DynamoDBtablename
+    Value: !Ref DynamoDBTable
     Export:
       Name: DynamoDB-Table
+
+  QueueURL:
+    Value : !GetAtt SQSQueue.QueueUrl
+    Export: 
+      Name: Queue-URL
+  
+  WebsiteURL:
+    Value: !GetAtt
+      - S3CoffeeWebsite
+      - WebsiteURL
+    Description: URL to the static website(coffee shop)
+  
+  S3BucketURL:
+    Value: !Join
+      - ''
+      - - 'https://'
+        - !GetAtt
+          - S3CoffeeWebsite
+          - DomainName 
+    Description: Name of the bucket containing website(coffee shop) content
