@@ -25,6 +25,24 @@ Parameters:
   bucketname: 
     Type: String
     Default: go-to-sleep-enable-cors
+  CloudwatchLogGrouplambda1:
+    Type: String
+    Default: submitlambdaCloudwatchLogGroup
+  CloudwatchLogGrouplambda2:
+    Type: String
+    Default: processlambdaCloudwatchLogGroup
+  CloudwatchLogGroupAPIgw:
+    Type: String
+    Default: APIGWCloudwatchLogGroup
+  CloudwatchLogStreamlambda1:
+    Type: String
+    Default: SUBMITLAMBDA-Logstream
+  CloudwatchLogStreamlambda2:
+    Type: String
+    Default: PROCESSLAMBDA-Logstream
+  CloudwatchLogStreamAPIgw:
+    Type: String
+    Default: APIGW-Logstream 
 
 Resources:
   SQSQueue:
@@ -46,7 +64,43 @@ Resources:
         WriteCapacityUnits: '5'
       TableName: orders
 
-  IAMRole:
+  submitlambdaLogGroup:
+    Type: AWS::Logs::LogGroup 
+    Properties: 
+      LogGroupName: !Ref CloudwatchLogGrouplambda1
+      RetentionInDays: 1
+  
+  processlambdaLogGroup:
+    Type: AWS::Logs::LogGroup 
+    Properties: 
+      LogGroupName: !Ref CloudwatchLogGrouplambda2
+      RetentionInDays: 1 
+  
+  APIGWLogGroup:
+    Type: AWS::Logs::LogGroup 
+    Properties: 
+      LogGroupName: !Ref CloudwatchLogGroupAPIgw
+      RetentionInDays: 1
+
+  submitlambdaLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref submitlambdaLogGroup
+      LogStreamName: !Ref CloudwatchLogStreamlambda1
+  
+  processlambdaLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref processlambdaLogGroup
+      LogStreamName: !Ref CloudwatchLogStreamlambda2
+
+  APIGWLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref APIGWLogGroup
+      LogStreamName: !Ref CloudwatchLogStreamAPIgw
+
+  submitLambdaIAMRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -58,41 +112,98 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
-      RoleName: process-orders-lambda-execution-role
+      RoleName: send-message-lambda-sqs-execution-role
       Policies: 
-        - PolicyName: Policy_api-lambda-db
+        - PolicyName: Policy_api-lambda-sqs
           PolicyDocument:
             Version: 2012-10-17
             Statement:
               - Effect: Allow
                 Action:
-                  - dynamodb:*
-                Resource: !GetAtt DynamoDBTable.Arn
+                  - sqs:SendMessage
+                Resource: !GetAtt SQSQueue.Arn
               - Effect: Allow
                 Action: 
-                  - sqs:*
-                Resource:
-                  - !GetAtt SQSQueue.Arn
-              - Effect: Allow
-                Action: 
-                  - s3:*
+                  - s3:GetObject
                 Resource:
                   - !Sub 
                     - "${BktArn}/*"
                     - BktArn: !ImportValue S3BucketArn
               - Effect: Allow
                 Action:
-                  - 'logs:CreateLogStream'
-                  - 'logs:CreateLogGroup'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
+                  - logs:PutLogEvents
+                Resource: !GetAtt submitlambdaLogGroup.Arn
 
+  processLambdaIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      RoleName: process-orders-lambda-sqs-execution-role
+      Policies: 
+        - PolicyName: Policy_api-lambda-sqs-db
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt DynamoDBTable.Arn
+              - Effect: Allow
+                Action: 
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - !GetAtt SQSQueue.Arn
+              - Effect: Allow
+                Action: 
+                  - s3:GetObject
+                Resource:
+                  - !Sub 
+                    - "${BktArn}/*"
+                    - BktArn: !ImportValue S3BucketArn
+              - Effect: Allow
+                Action:
+                  - logs:PutLogEvents
+                Resource: !GetAtt processlambdaLogGroup.Arn
+      
+  APIGWIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonApiGatewayPushToCloudWatchLogs
+
+  Account:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt APIGWIAMRole.Arn
+  
   submitLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.14
       FunctionName: submit-orders
-      Role: !GetAtt IAMRole.Arn
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref submitlambdaLogGroup
+      Role: !GetAtt submitLambdaIAMRole.Arn
       Handler: submit-order.lambda_handler
       Code:
         S3Bucket: !ImportValue BucketName
@@ -103,7 +214,10 @@ Resources:
     Properties:
       Runtime: python3.14
       FunctionName: process-orders
-      Role: !GetAtt IAMRole.Arn
+      LoggingConfig: 
+        LogFormat: JSON
+        LogGroup: !Ref processlambdaLogGroup
+      Role: !GetAtt processLambdaIAMRole.Arn
       Handler: process-orders.lambda_handler
       Code:
         S3Bucket: !ImportValue BucketName
