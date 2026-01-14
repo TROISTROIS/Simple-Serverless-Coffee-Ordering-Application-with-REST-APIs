@@ -2,7 +2,7 @@ import json
 import boto3
 
 sqs = boto3.client('sqs')
-queue_url = "YOUR-QUEUE-URL"
+queue_url = "https://sqs.us-east-1.amazonaws.com/966392475043/coffee-shop-queue"
 
 def lambda_handler(event, context):
     # TODO implement
@@ -16,7 +16,7 @@ def lambda_handler(event, context):
             'statusCode': 200,
             'headers': {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token",
                 "Access-Control-Allow-Methods": "OPTIONS,POST"},
             'body': json.dumps({'message': 'Order submitted to queue successfully'})
         }

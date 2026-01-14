@@ -3,7 +3,7 @@ import boto3
 from datetime import datetime
 
 dynamodb = boto3.resource('dynamodb')
-table_name = "YOUR-TABLE"
+table_name = "orders"
 table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
