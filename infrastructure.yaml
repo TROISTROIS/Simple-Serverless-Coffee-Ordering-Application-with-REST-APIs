@@ -66,16 +66,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - 'dynamodb:BatchGetItem'
-                  - 'dynamodb:BatchWriteItem'
-                  - 'dynamodb:TagResource'
-                  - 'dynamodb:UntagResource'
-                  - 'dynamodb:PutItem'
-                  - 'dynamodb:DeleteItem'
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:Scan'
-                  - 'dynamodb:Query'
-                  - 'dynamodb:UpdateItem'
+                  - dynamodb:*
                 Resource: !GetAtt DynamoDBTable.Arn
               - Effect: Allow
                 Action: 
@@ -118,10 +109,19 @@ Resources:
         S3Bucket: !ImportValue BucketName
         S3Key: !Ref Key2
 
+  SQSTriggerforLambda:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !Ref processLambdaFunction
+      EventSourceArn: !GetAtt SQSQueue.Arn
+
   coffeeRESTAPI:
     Type: AWS::ApiGateway::RestApi 
     Properties: 
       Name: !Ref APIName
+      EndpointConfiguration: 
+        Types:
+          - REGIONAL
   
   OrdersResource:
     Type: AWS::ApiGateway::Resource
@@ -132,6 +132,35 @@ Resources:
         - RootResourceId
       PathPart: orders
 
+  OPTIONSMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref coffeeRESTAPI
+      ResourceId: !Ref OrdersResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST, OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: NEVER
+        RequestTemplates: 
+          application/json: '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods:  true
+            method.response.header.Access-Control-Allow-Origin: true
+
   POSTMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -139,18 +168,26 @@ Resources:
       ResourceId: !Ref OrdersResource
       HttpMethod: POST
       AuthorizationType: NONE
-      Integration: 
+      Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub >-
-          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${submitLambdaFunction.Arn}/invocations
-  
+        Uri: !Join
+          - ''
+          - - 'arn:aws:apigateway:'
+            - !Ref AWS::Region
+            - ":lambda:path/2015-03-31/functions/"
+            - !GetAtt
+              - submitLambdaFunction
+              - Arn
+            - "/invocations"
+
   APIDeploy:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref coffeeRESTAPI
       StageName: !Ref APIEnvironmentStage
-    DependsOn: POSTMethod
+    DependsOn: 
+      - POSTMethod
 
   APIInvokeLambdaRole:
     Type: AWS::Lambda::Permission
@@ -158,7 +195,6 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt submitLambdaFunction.Arn
       Principal: apigateway.amazonaws.com
-    DependsOn: APIDeploy
 
   S3CoffeeWebsite:
     Type: AWS::S3::Bucket
