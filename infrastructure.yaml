@@ -19,7 +19,7 @@ Parameters:
   APIName:
     Type: String 
     Default: CoffeeShopAPI
-  APIEnvironmentStage:
+  APIDeployStage:
     Type: String
     Default: prod
   bucketname: 
@@ -31,18 +31,6 @@ Parameters:
   CloudwatchLogGrouplambda2:
     Type: String
     Default: processlambdaCloudwatchLogGroup
-  CloudwatchLogGroupAPIgw:
-    Type: String
-    Default: APIGWCloudwatchLogGroup
-  CloudwatchLogStreamlambda1:
-    Type: String
-    Default: SUBMITLAMBDA-Logstream
-  CloudwatchLogStreamlambda2:
-    Type: String
-    Default: PROCESSLAMBDA-Logstream
-  CloudwatchLogStreamAPIgw:
-    Type: String
-    Default: APIGW-Logstream 
 
 Resources:
   SQSQueue:
@@ -79,26 +67,11 @@ Resources:
   APIGWLogGroup:
     Type: AWS::Logs::LogGroup 
     Properties: 
-      LogGroupName: !Ref CloudwatchLogGroupAPIgw
+      LogGroupName: !Join
+        - '-'
+        - - !Ref coffeeRESTAPI
+          - access-logs
       RetentionInDays: 1
-
-  submitlambdaLogStream:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref submitlambdaLogGroup
-      LogStreamName: !Ref CloudwatchLogStreamlambda1
-  
-  processlambdaLogStream:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref processlambdaLogGroup
-      LogStreamName: !Ref CloudwatchLogStreamlambda2
-
-  APIGWLogStream:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref APIGWLogGroup
-      LogStreamName: !Ref CloudwatchLogStreamAPIgw
 
   submitLambdaIAMRole:
     Type: AWS::IAM::Role
@@ -131,8 +104,10 @@ Resources:
                     - BktArn: !ImportValue S3BucketArn
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt submitlambdaLogGroup.Arn
+                Resource: arn:aws:logs:*:*:*
 
   processLambdaIAMRole:
     Type: AWS::IAM::Role
@@ -172,8 +147,10 @@ Resources:
                     - BktArn: !ImportValue S3BucketArn
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt processlambdaLogGroup.Arn
+                Resource: arn:aws:logs:*:*:*
       
   APIGWIAMRole:
     Type: AWS::IAM::Role
@@ -299,10 +276,26 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref coffeeRESTAPI
-      StageName: !Ref APIEnvironmentStage
     DependsOn: 
       - POSTMethod
 
+  APIStage:
+    Type: AWS::ApiGateway::Stage 
+    Properties:
+      AccessLogSetting:
+        DestinationArn: !GetAtt APIGWLogGroup.Arn
+        Format: $context.extendedRequestId $context.identity.sourceIp $context.resourcePath $context.status $context.requestId
+      DeploymentId: !Ref APIDeploy
+      RestApiId: !Ref coffeeRESTAPI
+      StageName: !Ref APIDeployStage
+      MethodSettings:
+        - ResourcePath: /orders
+          HttpMethod: OPTIONS
+          LoggingLevel: INFO
+        - ResourcePath: /orders
+          HttpMethod: POST
+          LoggingLevel: INFO
+                   
   APIInvokeLambdaRole:
     Type: AWS::Lambda::Permission
     Properties: 
@@ -369,6 +362,6 @@ Outputs:
     Value: !Sub 
       - https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
       - APIGateway: !Ref coffeeRESTAPI
-        Environment: !Ref APIEnvironmentStage
+        Environment: !Ref APIDeployStage
     Export:
       Name: APIGatewayEndpoint
