@@ -4,7 +4,7 @@ This is a simple serverless e-commerce application where uses can order coffee u
 
 Use Cases:
 - Order Management: users can simply order what they need and it's going to be stored in the database. This can be useful for stock management at the end of the day or month.</br>
-- Handling Traffic Spikes: Sometimes, hundreds or thousands of users can submit order at the same time and to ensure the system works correcctly, SQS acts as a buffer holding the messages until when the next lambda function can be able to process them. </br>
+- Handling Traffic Spikes: Sometimes, hundreds or thousands of users can submit order at the same time and to ensure the system works correcctly, SQS acts as a buffer holding the messages until when the next lambda function can be able to process them. </br> 
 
 ## **Project Architecture**:
 ![alt text](https://github.com/TROISTROIS/Simple-Serverless-Coffee-Ordering-Application-with-REST-APIs/blob/main/Coffee%20Shop.jpg "Architecture Diagram") </br>
@@ -18,10 +18,14 @@ Use Cases:
 ### Deployment
 To deploy this project and its infrastructure you can do the following two ways:
 
-### Deploy Infrastructure using CloudFormation. 
+### 1. Deploy Infrastructure using CloudFormation. 
 Use the **yaml** file above to provision the infrastructure.</br>
 
-### Use the AWS Management console
+The IaC CloudFormation template provisions infrastructure needed for the API Gateway, two lambda functions, a DynamoDB table, SQS queue and necessary permissions with the principle of least priviledges kept in consideration. I have also handled CORS both on the resource and on the method using the OPTIONS method and a MOCK integration as well as POST method with a lambda proxy that of course handles the headers for me. Additionally, I have defined proper logging on CloudWatch for the two lambda functions as well as the API Gateway. </br>
+
+*Let us now deploy!* </br>
+
+### 2. Use the AWS Management console
 To use the management console, follow these steps:</br>
 1. Create the first Lamda function.</br>
    Name: **submit-order** </br>
