@@ -4,7 +4,7 @@ This is a simple serverless e-commerce application where uses can order coffee u
 
 Use Cases:
 - Order Management: users can simply order what they need and it's going to be stored in the database. This can be useful for stock management at the end of the day or month.</br>
-- Handling Traffic Spikes: Sometimes, hundreds or thousands of users can submit order at the same time and to ensure the system works correcctly, SQS acts as a buffer holding the messages until when the next lambda function can be able to process them. </br>
+- Handling Traffic Spikes: Sometimes, hundreds or thousands of users can submit order at the same time and to ensure the system works correcctly, SQS acts as a buffer holding the messages until when the next lambda function can be able to process them. </br> 
 
 ## **Project Architecture**:
 ![alt text](https://github.com/TROISTROIS/Simple-Serverless-Coffee-Ordering-Application-with-REST-APIs/blob/main/Coffee%20Shop.jpg "Architecture Diagram") </br>
